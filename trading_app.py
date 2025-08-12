@@ -37,25 +37,22 @@ def get_default_settings():
     return {
         "global_settings": {"account_balance": 1000.0, "risk_percentage": 1.0},
         "pair_settings": {
-            "EUR/USD": {"current_price": 1.08550, "ema_50_price": 1.08200, "rsi_14_value": 40.0, "raw_atr_value": 0.00150, "is_bullish_candle": False, "is_bearish_candle": False},
-            "GBP/USD": {"current_price": 1.27000, "ema_50_price": 1.26800, "rsi_14_value": 50.0, "raw_atr_value": 0.00200, "is_bullish_candle": False, "is_bearish_candle": False},
-            "USD/JPY": {"current_price": 157.100, "ema_50_price": 156.800, "rsi_14_value": 60.0, "raw_atr_value": 0.15000, "is_bullish_candle": False, "is_bearish_candle": False},
-            "AUD/USD": {"current_price": 0.66500, "ema_50_price": 0.66300, "rsi_14_value": 50.0, "raw_atr_value": 0.00120, "is_bullish_candle": False, "is_bearish_candle": False}
+            "EUR/USD": {"current_price": 1.08550, "ema_50_price": 1.08200, "rsi_14_value": 40.0, "raw_atr_value": 0.00150, "is_bullish_candle": False, "is_bearish_candle": False, "d1_trend": "ยังไม่ไดเช็ค", "near_key_level": False, "market_structure_ok": False},
+            "GBP/USD": {"current_price": 1.27000, "ema_50_price": 1.26800, "rsi_14_value": 50.0, "raw_atr_value": 0.00200, "is_bullish_candle": False, "is_bearish_candle": False, "d1_trend": "ยังไม่ไดเช็ค", "near_key_level": False, "market_structure_ok": False},
+            "USD/JPY": {"current_price": 157.100, "ema_50_price": 156.800, "rsi_14_value": 60.0, "raw_atr_value": 0.15000, "is_bullish_candle": False, "is_bearish_candle": False, "d1_trend": "ยังไม่ไดเช็ค", "near_key_level": False, "market_structure_ok": False},
+            "AUD/USD": {"current_price": 0.66500, "ema_50_price": 0.66300, "rsi_14_value": 50.0, "raw_atr_value": 0.00120, "is_bullish_candle": False, "is_bearish_candle": False, "d1_trend": "ยังไม่ไดเช็ค", "near_key_level": False, "market_structure_ok": False}
         }
     }
 
 def load_journal():
-    if not JOURNAL_FILE.exists():
-        return create_empty_journal_df()
+    if not JOURNAL_FILE.exists(): return create_empty_journal_df()
     try:
         df = pd.read_csv(JOURNAL_FILE)
         required_columns = create_empty_journal_df().columns
         for col in required_columns:
-            if col not in df.columns:
-                df[col] = 0.0 if "P/L" in col or col == "Lot_Size" else ""
+            if col not in df.columns: df[col] = 0.0 if "P/L" in col or col == "Lot_Size" else ""
         return df
-    except pd.errors.EmptyDataError:
-        return create_empty_journal_df()
+    except pd.errors.EmptyDataError: return create_empty_journal_df()
 
 def save_journal(df):
     df.to_csv(JOURNAL_FILE, index=False)
@@ -94,9 +91,8 @@ def generate_summary_text(pair, current_price, ema_price, rsi, atr_pips, trend):
     return summary
 
 # --- ส่วนหลักของแอป ---
-st.set_page_config(layout="wide", page_title="Trading Dashboard & Journal")
+st.set_page_config(layout="wide", page_title="Trading Dashboard Pro")
 
-# --- จัดการ State และเลือกโหมด ---
 if 'app_state' not in st.session_state:
     st.session_state.app_state = load_config()
 if 'active_mode' not in st.session_state:
@@ -106,9 +102,7 @@ if 'edit_index' not in st.session_state:
 
 previous_state = copy.deepcopy(st.session_state.app_state)
 
-# --- UI Sidebar ---
 with st.sidebar:
-    # ... (โค้ด Sidebar เหมือนเดิม) ...
     if st.button("📈 วางแผนเทรด", use_container_width=True, type="primary" if st.session_state.active_mode == "วางแผนเทรด (Dashboard)" else "secondary"):
         st.session_state.active_mode = "วางแผนเทรด (Dashboard)"
         st.rerun()
@@ -120,56 +114,54 @@ with st.sidebar:
     st.session_state.app_state["global_settings"]["account_balance"] = st.number_input("ยอดเงินในบัญชี ($)", value=st.session_state.app_state["global_settings"].get("account_balance", 1000.0), format="%.2f")
     st.session_state.app_state["global_settings"]["risk_percentage"] = st.slider("ความเสี่ยงที่ยอมรับได้ (%)", 0.5, 5.0, value=st.session_state.app_state["global_settings"].get("risk_percentage", 1.0), step=0.1)
 
-# --- ฟังก์ชันสร้าง Panel ---
 def create_analysis_panel(pair_name):
-    pair_settings = st.session_state.app_state["pair_settings"].get(pair_name, {})
+    pair_settings = st.session_state.app_state["pair_settings"].get(pair_name, get_default_settings()["pair_settings"][pair_name])
     global_settings = st.session_state.app_state["global_settings"]
 
     st.header(f"ข้อมูลตลาดของ {pair_name}")
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.subheader("ราคา (Price)")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("ราคาและ Indicators พื้นฐาน")
         current_price = st.number_input("ราคาปัจจุบัน", key=f"curr_{pair_name}", format="%.5f", step=0.00001, value=pair_settings.get("current_price", 1.0))
         ema_50_price = st.number_input("ราคา EMA 50 (H4)", key=f"ema_{pair_name}", format="%.5f", step=0.00001, value=pair_settings.get("ema_50_price", 1.0))
-    with col_b:
-        st.subheader("Indicators (H1)")
-        rsi_14_value = st.number_input("ค่า RSI (14)", key=f"rsi_{pair_name}", min_value=0.0, max_value=100.0, step=0.1, value=float(pair_settings.get("rsi_14_value", 50.0)))
-        raw_atr_value = st.number_input("ค่า ATR (14)", key=f"atr_{pair_name}", format="%.5f", step=0.00001, value=pair_settings.get("raw_atr_value", 0.0015))
-    st.subheader("สัญญาณยืนยัน (Confirmation - H1)")
-    candle_col1, candle_col2 = st.columns(2)
-    with candle_col1: is_bullish_candle = st.checkbox("พบแท่งเทียนกลับตัวฝั่ง 'ซื้อ'", key=f"bull_candle_{pair_name}", value=pair_settings.get("is_bullish_candle", False))
-    with candle_col2: is_bearish_candle = st.checkbox("พบแท่งเทียนกลับตัวฝั่ง 'ขาย'", key=f"bear_candle_{pair_name}", value=pair_settings.get("is_bearish_candle", False))
-    
+        rsi_14_value = st.number_input("ค่า RSI (H1)", key=f"rsi_{pair_name}", min_value=0.0, max_value=100.0, step=0.1, value=float(pair_settings.get("rsi_14_value", 50.0)))
+        raw_atr_value = st.number_input("ค่า ATR (H1)", key=f"atr_{pair_name}", format="%.5f", step=0.00001, value=pair_settings.get("raw_atr_value", 0.0015))
+    with c2:
+        st.subheader("การวิเคราะห์ขั้นสูง (Advanced Analysis)")
+        d1_trend_options = ["ยังไม่ไดเช็ค", "ขาขึ้น (Uptrend)", "ขาลง (Downtrend)", "ไม่ชัดเจน (Sideways)"]
+        d1_trend = st.selectbox("แนวโน้มกราฟรายวัน (D1)", options=d1_trend_options, key=f"d1_{pair_name}", index=d1_trend_options.index(pair_settings.get("d1_trend", "ยังไม่ไดเช็ค")))
+        near_key_level = st.checkbox("จุดเข้าเทรดอยู่ใกล้แนวรับ/แนวต้านสำคัญ", key=f"keylevel_{pair_name}", value=pair_settings.get("near_key_level", False))
+        market_structure_ok = st.checkbox("โครงสร้างตลาด (HH/HL หรือ LH/LL) สอดคล้อง", key=f"structure_{pair_name}", value=pair_settings.get("market_structure_ok", False))
+        st.subheader("สัญญาณยืนยัน (Confirmation - H1)")
+        is_bullish_candle = st.checkbox("พบแท่งเทียนกลับตัวฝั่ง 'ซื้อ'", key=f"bull_candle_{pair_name}", value=pair_settings.get("is_bullish_candle", False))
+        is_bearish_candle = st.checkbox("พบแท่งเทียนกลับตัวฝั่ง 'ขาย'", key=f"bear_candle_{pair_name}", value=pair_settings.get("is_bearish_candle", False))
+
     st.session_state.app_state["pair_settings"][pair_name] = {
-        "current_price": current_price, "ema_50_price": ema_50_price,
-        "rsi_14_value": rsi_14_value, "raw_atr_value": raw_atr_value,
-        "is_bullish_candle": is_bullish_candle, "is_bearish_candle": is_bearish_candle
+        "current_price": current_price, "ema_50_price": ema_50_price, "rsi_14_value": rsi_14_value, 
+        "raw_atr_value": raw_atr_value, "is_bullish_candle": is_bullish_candle, "is_bearish_candle": is_bearish_candle,
+        "d1_trend": d1_trend, "near_key_level": near_key_level, "market_structure_ok": market_structure_ok
     }
 
     st.divider()
     with st.container(border=True):
         st.subheader("บทวิเคราะห์และแผนการเทรด")
-        if current_price > ema_50_price: trend = "ขาขึ้น (Uptrend)"
-        else: trend = "ขาลง (Downtrend)"
-        buy_trend_ok, buy_rsi_ok, buy_candle_ok = (trend == "ขาขึ้น (Uptrend)"), (30 < rsi_14_value <= 45), is_bullish_candle
-        sell_trend_ok, sell_rsi_ok, sell_candle_ok = (trend == "ขาลง (Downtrend)"), (55 <= rsi_14_value < 70), is_bearish_candle
+        h4_trend = "ขาขึ้น (Uptrend)" if current_price > ema_50_price else "ขาลง (Downtrend)"
+        buy_d1_ok, buy_h4_ok, buy_structure_ok, buy_keylevel_ok, buy_rsi_ok, buy_candle_ok = (d1_trend == "ขาขึ้น (Uptrend)"), (h4_trend == "ขาขึ้น (Uptrend)"), market_structure_ok, near_key_level, (30 < rsi_14_value <= 45), is_bullish_candle
+        sell_d1_ok, sell_h4_ok, sell_structure_ok, sell_keylevel_ok, sell_rsi_ok, sell_candle_ok = (d1_trend == "ขาลง (Downtrend)"), (h4_trend == "ขาลง (Downtrend)"), market_structure_ok, near_key_level, (55 <= rsi_14_value < 70), is_bearish_candle
         pip_multiplier = get_pip_multiplier(pair_name)
         atr_pips = raw_atr_value * pip_multiplier
-
-        # --- ส่วนที่ 1 ที่แก้ไข: เพิ่มบทสรุปสถานการณ์ ---
-        summary = generate_summary_text(pair_name, current_price, ema_50_price, rsi_14_value, atr_pips, trend)
+        summary = generate_summary_text(pair_name, current_price, ema_50_price, rsi_14_value, atr_pips, h4_trend)
         st.info(summary)
-        # --- จบส่วนที่แก้ไข ---
 
-        if buy_trend_ok and buy_rsi_ok and buy_candle_ok:
-            st.success("**Action: เตรียมเข้าซื้อ (Strong Buy Signal)**")
-            reason = "H4 Uptrend, H1 RSI Pullback, Bullish Confirmation Candle"
+        is_strong_buy, is_strong_sell = all([buy_d1_ok, buy_h4_ok, buy_structure_ok, buy_keylevel_ok, buy_rsi_ok, buy_candle_ok]), all([sell_d1_ok, sell_h4_ok, sell_structure_ok, sell_keylevel_ok, sell_rsi_ok, sell_candle_ok])
+
+        if is_strong_buy:
+            st.success("**Action: สัญญาณซื้อคุณภาพสูง (High-Probability Buy Signal)**")
+            reason = "D1/H4/Structure Uptrend, Pullback to Key Level, RSI OK, Bullish Candle"
             entry, sl_pips = current_price, atr_pips * SL_ATR_MULTIPLIER
-            sl = entry - (sl_pips / pip_multiplier)
-            tp_pips = sl_pips * RR_RATIO
-            tp = entry + (tp_pips / pip_multiplier)
+            sl, tp = entry - (sl_pips / pip_multiplier), entry + ((sl_pips * RR_RATIO) / pip_multiplier)
             lot_size, risk_amount = calculate_position_size(global_settings["account_balance"], global_settings["risk_percentage"], sl_pips, pair_name)
-            display_trade_plan("ซื้อ ณ ราคาตลาด", entry, sl, tp, sl_pips, tp_pips, lot_size, risk_amount)
+            display_trade_plan("ซื้อ ณ ราคาตลาด", entry, sl, tp, sl_pips, sl_pips * RR_RATIO, lot_size, risk_amount)
 
             if st.button("✅ ยืนยันเข้าเทรด Buy นี้", key=f"confirm_buy_{pair_name}", use_container_width=True):
                 new_trade = {"Date": datetime.now().strftime("%Y-%m-%d"), "Pair": pair_name, "Direction": "Buy", "Entry": entry, "Exit": 0.0, "SL": sl, "TP": tp, "Lot_Size": round(lot_size, 2), "P/L (Pips)": 0.0, "P/L ($)": 0.0, "Outcome": "Pending", "Reason": reason, "Review": ""}
@@ -177,49 +169,45 @@ def create_analysis_panel(pair_name):
                 df_new = pd.concat([pd.DataFrame([new_trade]), df], ignore_index=True)
                 save_journal(df_new)
                 st.session_state.active_mode = "Journal"
-                st.success(f"บันทึกแผนเทรด {pair_name} Buy ลง Journal เรียบร้อย!")
                 st.rerun()
-
-        elif sell_trend_ok and sell_rsi_ok and sell_candle_ok:
-            st.error("**Action: เตรียมเข้าขาย (Strong Sell Signal)**")
-            reason = "H4 Downtrend, H1 RSI Rally, Bearish Confirmation Candle"
+        
+        elif is_strong_sell:
+            st.error("**Action: สัญญาณขายคุณภาพสูง (High-Probability Sell Signal)**")
+            reason = "D1/H4/Structure Downtrend, Rally to Key Level, RSI OK, Bearish Candle"
             entry, sl_pips = current_price, atr_pips * SL_ATR_MULTIPLIER
-            sl = entry + (sl_pips / pip_multiplier)
-            tp_pips = sl_pips * RR_RATIO
-            tp = entry - (tp_pips / pip_multiplier)
+            sl, tp = entry + (sl_pips / pip_multiplier), entry - ((sl_pips * RR_RATIO) / pip_multiplier)
             lot_size, risk_amount = calculate_position_size(global_settings["account_balance"], global_settings["risk_percentage"], sl_pips, pair_name)
-            display_trade_plan("ขาย ณ ราคาตลาด", entry, sl, tp, sl_pips, tp_pips, lot_size, risk_amount)
-
+            display_trade_plan("ขาย ณ ราคาตลาด", entry, sl, tp, sl_pips, sl_pips * RR_RATIO, lot_size, risk_amount)
+            
             if st.button("❌ ยืนยันเข้าเทรด Sell นี้", key=f"confirm_sell_{pair_name}", use_container_width=True):
                 new_trade = {"Date": datetime.now().strftime("%Y-%m-%d"), "Pair": pair_name, "Direction": "Sell", "Entry": entry, "Exit": 0.0, "SL": sl, "TP": tp, "Lot_Size": round(lot_size, 2), "P/L (Pips)": 0.0, "P/L ($)": 0.0, "Outcome": "Pending", "Reason": reason, "Review": ""}
                 df = load_journal()
                 df_new = pd.concat([pd.DataFrame([new_trade]), df], ignore_index=True)
                 save_journal(df_new)
                 st.session_state.active_mode = "Journal"
-                st.success(f"บันทึกแผนเทรด {pair_name} Sell ลง Journal เรียบร้อย!")
                 st.rerun()
         else:
-            # --- ส่วนที่ 2 ที่แก้ไข: ปรับปรุงคำแนะนำ "รอต่อไป" ---
             st.warning("**Action: รอต่อไป (Wait / Stay Flat)**")
             with st.container(border=True):
                 st.write("สัญญาณยังไม่ครบถ้วนตามระบบ ควรอยู่เฉยๆ เพื่อรอโอกาสที่ดีกว่า")
-                if buy_trend_ok:
-                    if not buy_rsi_ok:
-                        st.info("💡 **คำแนะนำ:** ทิศทางเป็นขาขึ้น แต่ราคายังไม่ย่อตัว ควรรอให้ RSI (H1) ปรับตัวลงมาอยู่ในโซน 30-45 ก่อนหาจังหวะเข้าซื้อ")
-                    elif not buy_candle_ok:
-                        st.info("💡 **คำแนะนำ:** สัญญาณเกือบครบ! ทิศทางและการย่อตัวดีแล้ว ขาดเพียง **แท่งเทียนยืนยันฝั่งซื้อ** ที่แนวรับ (เช่น Hammer, Bullish Engulfing) เพื่อยืนยันการกลับตัว")
-                elif sell_trend_ok:
-                    if not sell_rsi_ok:
-                        st.info("💡 **คำแนะนำ:** ทิศทางเป็นขาลง แต่ราคายังไม่ดีดตัวขึ้น ควรรอให้ RSI (H1) ปรับตัวขึ้นไปในโซน 55-70 ก่อนหาจังหวะเข้าขาย")
-                    elif not sell_candle_ok:
-                        st.info("💡 **คำแนะนำ:** สัญญาณเกือบครบ! ทิศทางและการดีดตัวดีแล้ว ขาดเพียง **แท่งเทียนยืนยันฝั่งขาย** ที่แนวต้าน (เช่น Shooting Star, Bearish Engulfing) เพื่อยืนยันการกลับตัว")
+                if buy_h4_ok: 
+                    if not buy_d1_ok: st.info("💡 **คำแนะนำ:** แนวโน้ม H4 เป็นขาขึ้น แต่สวนทางกับแนวโน้มหลักในกราฟวัน (D1) มีความเสี่ยงสูง ควรรอให้ทิศทางสอดคล้องกันก่อน")
+                    elif not buy_structure_ok: st.info("💡 **คำแนะนำ:** แนวโน้มดี แต่โครงสร้างราคา (HH/HL) ยังไม่ชัดเจน ควรรอให้ราคาสร้าง Higher Low ที่สมบูรณ์ก่อน")
+                    elif not buy_keylevel_ok: st.info("💡 **คำแนะนำ:** จุดเข้าปัจจุบันยังไม่อยู่ในโซนแนวรับที่แข็งแกร่ง ควรรอให้ราคาย่อตัวลงไปหาแนวรับที่ชัดเจนกว่านี้")
+                    elif not buy_rsi_ok: st.info(f"💡 **คำแนะนำ:** ทิศทางเป็นขาขึ้น แต่ราคายังไม่ย่อตัว (RSI ปัจจุบัน: {rsi_14_value:.1f}) ควรรอให้ RSI (H1) ปรับตัวลงมาอยู่ในโซน 30-45 ก่อน")
+                    elif not buy_candle_ok: st.info("💡 **คำแนะนำ:** สัญญาณเกือบครบ! ขาดเพียง **แท่งเทียนยืนยันฝั่งซื้อ** เพื่อยืนยันการกลับตัว")
+                elif sell_h4_ok:
+                    if not sell_d1_ok: st.info("💡 **คำแนะนำ:** แนวโน้ม H4 เป็นขาลง แต่สวนทางกับแนวโน้มหลักในกราฟวัน (D1) มีความเสี่ยงสูง ควรรอให้ทิศทางสอดคล้องกันก่อน")
+                    elif not sell_structure_ok: st.info("💡 **คำแนะนำ:** แนวโน้มดี แต่โครงสร้างราคา (LH/LL) ยังไม่ชัดเจน ควรรอให้ราคาสร้าง Lower High ที่สมบูรณ์ก่อน")
+                    elif not sell_keylevel_ok: st.info("💡 **คำแนะนำ:** จุดเข้าปัจจุบันยังไม่อยู่ในโซนแนวต้านที่แข็งแกร่ง ควรรอให้ราคาดีดตัวขึ้นไปหาแนวต้านที่ชัดเจนกว่านี้")
+                    elif not sell_rsi_ok: st.info(f"💡 **คำแนะนำ:** ทิศทางเป็นขาลง แต่ราคายังไม่ดีดตัวขึ้น (RSI ปัจจุบัน: {rsi_14_value:.1f}) ควรรอให้ RSI (H1) ปรับตัวขึ้นไปในโซน 55-70 ก่อน")
+                    elif not sell_candle_ok: st.info("💡 **คำแนะนำ:** สัญญาณเกือบครบ! ขาดเพียง **แท่งเทียนยืนยันฝั่งขาย** เพื่อยืนยันการกลับตัว")
                 else:
-                    st.info("💡 **คำแนะนำ:** แนวโน้มยังไม่ชัดเจน (ราคาวิ่งอยู่ใกล้เส้น EMA 50) ควรรอให้ราคาสร้างทิศทางที่แน่นอนก่อน")
-            # --- จบส่วนที่แก้ไข ---
-            
+                    st.info("💡 **คำแนะนำ:** แนวโน้ม H4 ยังไม่ชัดเจน ควรรอให้ราคาสร้างทิศทางที่แน่นอนก่อน")
+
 # --- โหมดที่ 1: วางแผนเทรด ---
 if st.session_state.active_mode == "วางแผนเทรด (Dashboard)":
-    st.title("📈 Trading Dashboard")
+    st.title("📈 Trading Dashboard Pro")
     tabs = st.tabs(PAIRS_TO_ANALYZE)
     for i, pair_name in enumerate(PAIRS_TO_ANALYZE):
         with tabs[i]:
@@ -231,7 +219,6 @@ elif "Journal" in st.session_state.active_mode:
     df = load_journal()
 
     if st.session_state.edit_index is not None:
-        # ... (โค้ดส่วนแก้ไข Journal เหมือนเดิม) ...
         st.subheader(f"✏️ แก้ไขการเทรดลำดับที่ {st.session_state.edit_index}")
         try: initial_data = df.loc[st.session_state.edit_index].to_dict()
         except KeyError:
@@ -243,7 +230,6 @@ elif "Journal" in st.session_state.active_mode:
             st.info("กรอกข้อมูลเมื่อเทรดจบแล้ว หรือแก้ไข SL/TP ที่ใช้จริง")
             st.markdown(f"**เหตุผลที่เข้าเทรด:** `{initial_data.get('Reason', '')}`")
             st.divider()
-
             c1, c2, c3, c4 = st.columns(4)
             entry_price = c1.number_input("ราคาเข้าจริง", value=float(initial_data.get("Entry", 0.0)), format="%.5f")
             sl_price = c2.number_input("SL จริง", value=float(initial_data.get("SL", 0.0)), format="%.5f")
@@ -260,26 +246,26 @@ elif "Journal" in st.session_state.active_mode:
                 
                 lot_size = initial_data.get("Lot_Size", 0.01)
                 pip_value = PIP_VALUE_USD_PER_LOT.get(initial_data["Pair"], 10)
-                pl_usd = pips * pip_value * lot_size
-
+                pl_usd_new = round(pips * pip_value * lot_size, 2) if outcome != "Pending" else 0.0
+                
+                # --- ส่วนที่แก้ไข: คำนวณ Balance แบบ Incremental ---
+                old_pl_usd = initial_data.get("P/L ($)", 0.0)
+                balance_change = pl_usd_new - old_pl_usd
+                current_balance = st.session_state.app_state["global_settings"]["account_balance"]
+                new_balance = current_balance + balance_change
+                st.session_state.app_state["global_settings"]["account_balance"] = new_balance
+                # --- จบส่วนที่แก้ไข ---
+                
                 df.loc[st.session_state.edit_index, "Entry"] = entry_price
                 df.loc[st.session_state.edit_index, "SL"] = sl_price
                 df.loc[st.session_state.edit_index, "TP"] = tp_price
                 df.loc[st.session_state.edit_index, "Exit"] = exit_price
                 df.loc[st.session_state.edit_index, "Outcome"] = outcome
                 df.loc[st.session_state.edit_index, "P/L (Pips)"] = round(pips, 1) if outcome != "Pending" else 0.0
-                df.loc[st.session_state.edit_index, "P/L ($)"] = round(pl_usd, 2) if outcome != "Pending" else 0.0
+                df.loc[st.session_state.edit_index, "P/L ($)"] = pl_usd_new
                 df.loc[st.session_state.edit_index, "Review"] = review_notes
                 
                 save_journal(df)
-
-                df_finished = df[df['Outcome'] != 'Pending']
-                total_pl_usd = df_finished['P/L ($)'].sum()
-                initial_balance = get_default_settings()["global_settings"]["account_balance"]
-                new_balance = initial_balance + total_pl_usd
-                
-                st.session_state.app_state["global_settings"]["account_balance"] = new_balance
-                
                 st.success("แก้ไขข้อมูลเรียบร้อย! ยอดเงินในบัญชีถูกอัปเดตแล้ว")
                 st.session_state.edit_index = None
                 st.rerun()
@@ -287,7 +273,6 @@ elif "Journal" in st.session_state.active_mode:
     st.divider()
     st.subheader("ประวัติการเทรดทั้งหมด")
     if not df.empty:
-        # ... (โค้ดส่วนแสดงประวัติเหมือนเดิม) ...
         for index, row in df.iterrows():
             with st.container(border=True):
                 c1, c2, c3, c4, c5, c6 = st.columns([2, 1, 1, 1, 1, 2])
