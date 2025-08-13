@@ -71,18 +71,36 @@ def create_empty_journal_df():
 def analyze_chart_data(pair, timeframe, period):
     ticker_name = f"{pair.replace('/', '')}=X"
     df = yf.download(ticker_name, period=period, interval=timeframe, progress=False)
-    
-    # --- ส่วนที่แก้ไข: จัดการกับ MultiIndex Columns ---
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.droplevel()
-    df.columns = df.columns.str.lower()
-    # --- จบส่วนที่แก้ไข ---
 
+    # --- ส่วนที่แก้ไข: จัดการกับ MultiIndex Columns และชื่อคอลัมน์ให้เป็นมาตรฐาน ---
     if df.empty:
         return {"trend": "No Data", "structure_ok": False, "latest_ema": 0}
+        
+    # ดึงคอลัมน์ 'Close' ออกมา ถ้าไม่มีให้ลองหา 'close' หรืออื่นๆ
+    if 'Close' in df.columns:
+        df = df.rename(columns={'Close': 'close'})
+    elif 'close' not in df.columns:
+        # หากไม่มีทั้ง 'Close' และ 'close' ให้ทำการปรับชื่อคอลัมน์ทั้งหมดให้เป็นตัวพิมพ์เล็ก
+        # และตรวจสอบว่ามีคอลัมน์ 'close' หรือ 'adj close' หรือไม่
+        df.columns = df.columns.str.lower()
+        if 'adj close' in df.columns:
+            df = df.rename(columns={'adj close': 'close'})
+
+    # ส่วนที่ดักจับข้อผิดพลาดเพิ่มเติม
+    if 'close' not in df.columns:
+        st.error(f"ไม่พบข้อมูลราคาปิด ('close') สำหรับคู่เงิน {pair}")
+        return {"trend": "No Data", "structure_ok": False, "latest_ema": 0}
+        
+    # --- จบส่วนที่แก้ไข ---
 
     # Calculate EMA
     df.ta.ema(length=50, append=True)
+
+    # ตรวจสอบว่าคอลัมน์ 'ema_50' ถูกสร้างขึ้นหรือไม่
+    if 'ema_50' not in df.columns:
+        st.error(f"ไม่สามารถคำนวณ EMA สำหรับคู่เงิน {pair} ได้")
+        return {"trend": "No Data", "structure_ok": False, "latest_ema": 0}
+
     latest_close = df['close'].iloc[-1]
     latest_ema = df['ema_50'].iloc[-1]
     
@@ -90,21 +108,25 @@ def analyze_chart_data(pair, timeframe, period):
     trend = "ขาขึ้น (Uptrend)" if latest_close > latest_ema else "ขาลง (Downtrend)"
 
     # Analyze Market Structure
-    high_peaks, _ = find_peaks(df['high'], distance=5, prominence=0.001)
-    low_peaks, _ = find_peaks(-df['low'], distance=5, prominence=0.001)
+    if 'high' not in df.columns or 'low' not in df.columns:
+        st.warning(f"ไม่พบข้อมูลราคาสูงสุด/ต่ำสุดสำหรับคู่เงิน {pair}")
+        structure_ok = False
+    else:
+        high_peaks, _ = find_peaks(df['high'], distance=5, prominence=0.001)
+        low_peaks, _ = find_peaks(-df['low'], distance=5, prominence=0.001)
     
-    structure_ok = False
-    if trend == "ขาขึ้น (Uptrend)" and len(high_peaks) >= 2 and len(low_peaks) >= 2:
-        if df['high'].iloc[high_peaks[-1]] > df['high'].iloc[high_peaks[-2]] and \
-           df['low'].iloc[low_peaks[-1]] > df['low'].iloc[low_peaks[-2]]:
-            structure_ok = True
-    elif trend == "ขาลง (Downtrend)" and len(high_peaks) >= 2 and len(low_peaks) >= 2:
-        if df['high'].iloc[high_peaks[-1]] < df['high'].iloc[high_peaks[-2]] and \
-           df['low'].iloc[low_peaks[-1]] < df['low'].iloc[low_peaks[-2]]:
-            structure_ok = True
-            
+        structure_ok = False
+        if trend == "ขาขึ้น (Uptrend)" and len(high_peaks) >= 2 and len(low_peaks) >= 2:
+            if df['high'].iloc[high_peaks[-1]] > df['high'].iloc[high_peaks[-2]] and \
+               df['low'].iloc[low_peaks[-1]] > df['low'].iloc[low_peaks[-2]]:
+                structure_ok = True
+        elif trend == "ขาลง (Downtrend)" and len(high_peaks) >= 2 and len(low_peaks) >= 2:
+            if df['high'].iloc[high_peaks[-1]] < df['high'].iloc[high_peaks[-2]] and \
+               df['low'].iloc[low_peaks[-1]] < df['low'].iloc[low_peaks[-2]]:
+                structure_ok = True
+    
     return {"trend": trend, "structure_ok": structure_ok, "latest_ema": latest_ema}
-
+    
 # --- ฟังก์ชันผู้ช่วยอื่นๆ ---
 def get_pip_multiplier(pair):
     return PIP_MULTIPLIERS["JPY"] if "JPY" in pair else PIP_MULTIPLIERS["Default"]
@@ -237,3 +259,4 @@ elif "Journal" in st.session_state.active_mode:
 if previous_state != st.session_state.app_state:
     save_config(st.session_state.app_state)
     st.toast('บันทึกการเปลี่ยนแปลงอัตโนมัติ!', icon='💾')
+
