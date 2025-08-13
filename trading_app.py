@@ -36,7 +36,7 @@ def load_config():
 
 def get_default_settings():
     default_pair_settings = {
-        "current_price": 1.08550, "ema_50_price": 1.08200, "rsi_14_value": 40.0, 
+        "current_price": 1.08550, "ema_50_price": 1.08200, "rsi_14_value": 40.0,
         "raw_atr_value": 0.00150, "is_bullish_candle": False, "is_bearish_candle": False,
         "d1_trend": "ยังไม่ไดเช็ค", "near_key_level": False, "market_structure_ok": False
     }
@@ -120,7 +120,7 @@ def create_analysis_panel(pair_name):
     global_settings = st.session_state.app_state["global_settings"]
 
     st.header(f"ข้อมูลตลาดของ {pair_name}")
-    
+
     if st.button(f"🔄 ดึงราคา {pair_name} ล่าสุด", key=f"refresh_{pair_name}"):
         try:
             ticker_name = f"{pair_name.replace('/', '')}=X"
@@ -143,20 +143,20 @@ def create_analysis_panel(pair_name):
         ema_50_price = st.number_input("ราคา EMA 50 (H4)", key=f"ema_{pair_name}", format="%.5f", step=0.00001, value=pair_settings.get("ema_50_price", 1.0))
         rsi_14_value = st.number_input("ค่า RSI (H1)", key=f"rsi_{pair_name}", min_value=0.0, max_value=100.0, step=0.1, value=float(pair_settings.get("rsi_14_value", 50.0)))
         raw_atr_value = st.number_input("ค่า ATR (H1)", key=f"atr_{pair_name}", format="%.5f", step=0.00001, value=pair_settings.get("raw_atr_value", 0.0015))
-    
+
     with c2:
         st.subheader("การวิเคราะห์ขั้นสูง (Advanced Analysis)")
         d1_trend_options = ["ยังไม่ไดเช็ค", "ขาขึ้น (Uptrend)", "ขาลง (Downtrend)", "ไม่ชัดเจน (Sideways)"]
         d1_trend = st.selectbox("แนวโน้มกราฟรายวัน (D1)", options=d1_trend_options, key=f"d1_{pair_name}", index=d1_trend_options.index(pair_settings.get("d1_trend", "ยังไม่ไดเช็ค")))
         near_key_level = st.checkbox("จุดเข้าเทรดอยู่ใกล้แนวรับ/แนวต้านสำคัญ", key=f"keylevel_{pair_name}", value=pair_settings.get("near_key_level", False))
         market_structure_ok = st.checkbox("โครงสร้างตลาด (HH/HL หรือ LH/LL) สอดคล้อง", key=f"structure_{pair_name}", value=pair_settings.get("market_structure_ok", False))
-        
+
         st.subheader("สัญญาณยืนยัน (Confirmation - H1)")
         is_bullish_candle = st.checkbox("พบแท่งเทียนกลับตัวฝั่ง 'ซื้อ'", key=f"bull_candle_{pair_name}", value=pair_settings.get("is_bullish_candle", False))
         is_bearish_candle = st.checkbox("พบแท่งเทียนกลับตัวฝั่ง 'ขาย'", key=f"bear_candle_{pair_name}", value=pair_settings.get("is_bearish_candle", False))
 
     st.session_state.app_state["pair_settings"][pair_name] = {
-        "current_price": current_price, "ema_50_price": ema_50_price, "rsi_14_value": rsi_14_value, 
+        "current_price": current_price, "ema_50_price": ema_50_price, "rsi_14_value": rsi_14_value,
         "raw_atr_value": raw_atr_value, "is_bullish_candle": is_bullish_candle, "is_bearish_candle": is_bearish_candle,
         "d1_trend": d1_trend, "near_key_level": near_key_level, "market_structure_ok": market_structure_ok
     }
@@ -169,7 +169,7 @@ def create_analysis_panel(pair_name):
         sell_d1_ok, sell_h4_ok, sell_structure_ok, sell_keylevel_ok, sell_rsi_ok, sell_candle_ok = (d1_trend == "ขาลง (Downtrend)"), (h4_trend == "ขาลง (Downtrend)"), market_structure_ok, near_key_level, (55 <= rsi_14_value < 70), is_bearish_candle
         pip_multiplier = get_pip_multiplier(pair_name)
         atr_pips = raw_atr_value * pip_multiplier
-        
+
         summary = generate_summary_text(pair_name, current_price, ema_50_price, rsi_14_value, atr_pips, h4_trend)
         st.info(summary)
 
@@ -191,7 +191,7 @@ def create_analysis_panel(pair_name):
                 save_journal(df_new)
                 st.session_state.active_mode = "Journal"
                 st.rerun()
-        
+
         elif is_strong_sell:
             st.error("**Action: สัญญาณขายคุณภาพสูง (High-Probability Sell Signal)**")
             reason = "D1/H4/Structure Downtrend, Rally to Key Level, RSI OK, Bearish Candle"
@@ -199,7 +199,7 @@ def create_analysis_panel(pair_name):
             sl, tp = entry + (sl_pips / pip_multiplier), entry - ((sl_pips * RR_RATIO) / pip_multiplier)
             lot_size, risk_amount = calculate_position_size(global_settings["account_balance"], global_settings["risk_percentage"], sl_pips, pair_name)
             display_trade_plan("ขาย ณ ราคาตลาด", entry, sl, tp, sl_pips, sl_pips * RR_RATIO, lot_size, risk_amount)
-            
+
             if st.button("❌ ยืนยันเข้าเทรด Sell นี้", key=f"confirm_sell_{pair_name}", use_container_width=True):
                 new_trade = {"Date": datetime.now().strftime("%Y-%m-%d"), "Pair": pair_name, "Direction": "Sell", "Entry": entry, "Exit": 0.0, "SL": sl, "TP": tp, "Lot_Size": round(lot_size, 2), "P/L (Pips)": 0.0, "P/L ($)": 0.0, "Outcome": "Pending", "Reason": reason, "Review": ""}
                 df = load_journal()
@@ -211,7 +211,7 @@ def create_analysis_panel(pair_name):
             st.warning("**Action: รอต่อไป (Wait / Stay Flat)**")
             with st.container(border=True):
                 st.write("สัญญาณยังไม่ครบถ้วนตามระบบ ควรอยู่เฉยๆ เพื่อรอโอกาสที่ดีกว่า")
-                if buy_h4_ok: 
+                if buy_h4_ok:
                     if not buy_d1_ok: st.info("💡 **คำแนะนำ:** แนวโน้ม H4 เป็นขาขึ้น แต่สวนทางกับแนวโน้มหลักในกราฟวัน (D1) มีความเสี่ยงสูง ควรรอให้ทิศทางสอดคล้องกันก่อน")
                     elif not buy_structure_ok: st.info("💡 **คำแนะนำ:** แนวโน้มดี แต่โครงสร้างราคา (HH/HL) ยังไม่ชัดเจน ควรรอให้ราคาสร้าง Higher Low ที่สมบูรณ์ก่อน")
                     elif not buy_keylevel_ok: st.info("💡 **คำแนะนำ:** จุดเข้าปัจจุบันยังไม่อยู่ในโซนแนวรับที่แข็งแกร่ง ควรรอให้ราคาย่อตัวลงไปหาแนวรับที่ชัดเจนกว่านี้")
@@ -251,13 +251,11 @@ elif "Journal" in st.session_state.active_mode:
             st.info("กรอกข้อมูลเมื่อเทรดจบแล้ว หรือแก้ไข SL/TP ที่ใช้จริง")
             st.markdown(f"**เหตุผลที่เข้าเทรด:** `{initial_data.get('Reason', '')}`")
             st.divider()
-
             c1, c2, c3, c4 = st.columns(4)
             entry_price = c1.number_input("ราคาเข้าจริง", value=float(initial_data.get("Entry", 0.0)), format="%.5f")
             sl_price = c2.number_input("SL จริง", value=float(initial_data.get("SL", 0.0)), format="%.5f")
             tp_price = c3.number_input("TP จริง", value=float(initial_data.get("TP", 0.0)), format="%.5f")
             exit_price = c4.number_input("ราคาออกจริง", value=float(initial_data.get("Exit", 0.0)), format="%.5f")
-
             outcome = st.radio("ผลลัพธ์สุดท้าย", ["Pending", "Win", "Loss"], index=["Pending", "Win", "Loss"].index(initial_data.get("Outcome", "Pending")), horizontal=True)
             review_notes = st.text_area("บทเรียนที่ได้จากเทรดนี้", value=str(initial_data.get("Review", "")))
             
